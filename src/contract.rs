@@ -141,3 +141,61 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
+//testes 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cosmwasm_std::coins;
+    use cosmwasm_std::testing::{message_info, mock_dependencies, mock_env};
+
+    fn setup() -> (cosmwasm_std::OwnedDeps<_, _, _, _>, cosmwasm_std::Addr) {
+        let mut deps = mock_dependencies();
+        let owner = deps.api.addr_make("owner");
+        let msg = InstantiateMsg {
+            goal: Uint128::new(100),
+            denom: "untrn".into(),
+            duration_seconds: 1000,
+        };
+        instantiate(deps.as_mut(), mock_env(), message_info(&owner, &[]), msg).unwrap();
+        (deps, owner)
+    }
+
+    #[test]
+    fn goal_reached_owner_withdraws() {
+        let (mut deps, owner) = setup();
+        let alice = deps.api.addr_make("alice");
+
+        execute(deps.as_mut(), mock_env(),
+            message_info(&alice, &coins(100, "untrn")), ExecuteMsg::Contribute {}).unwrap();
+
+        let mut env = mock_env();
+        env.block.time = env.block.time.plus_seconds(1001);
+        let res = execute(deps.as_mut(), env, message_info(&owner, &[]), ExecuteMsg::Withdraw {}).unwrap();
+        assert_eq!(res.messages.len(), 1);
+    }
+
+    #[test]
+    fn goal_missed_contributor_refunds() {
+        let (mut deps, _) = setup();
+        let bob = deps.api.addr_make("bob");
+
+        execute(deps.as_mut(), mock_env(),
+            message_info(&bob, &coins(40, "untrn")), ExecuteMsg::Contribute {}).unwrap();
+
+        let mut env = mock_env();
+        env.block.time = env.block.time.plus_seconds(1001);
+        execute(deps.as_mut(), env.clone(), message_info(&bob, &[]), ExecuteMsg::Refund {}).unwrap();
+
+        // segundo reembolso deve falhar
+        let err = execute(deps.as_mut(), env, message_info(&bob, &[]), ExecuteMsg::Refund {}).unwrap_err();
+        assert!(matches!(err, ContractError::NothingToRefund {}));
+    }
+
+    #[test]
+    fn cannot_withdraw_before_deadline() {
+        let (mut deps, owner) = setup();
+        let err = execute(deps.as_mut(), mock_env(), message_info(&owner, &[]), ExecuteMsg::Withdraw {}).unwrap_err();
+        assert!(matches!(err, ContractError::CampaignOpen {}));
+    }
+}
