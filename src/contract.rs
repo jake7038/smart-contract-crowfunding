@@ -147,9 +147,12 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 mod tests {
     use super::*;
     use cosmwasm_std::coins;
-    use cosmwasm_std::testing::{message_info, mock_dependencies, mock_env};
+    use cosmwasm_std::testing::{
+        message_info, mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage,
+    };
+    use cosmwasm_std::{Addr, OwnedDeps};
 
-    fn setup() -> (cosmwasm_std::OwnedDeps<_, _, _, _>, cosmwasm_std::Addr) {
+    fn setup() -> (OwnedDeps<MockStorage, MockApi, MockQuerier>, Addr) {
         let mut deps = mock_dependencies();
         let owner = deps.api.addr_make("owner");
         let msg = InstantiateMsg {
